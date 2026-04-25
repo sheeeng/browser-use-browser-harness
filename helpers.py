@@ -143,7 +143,10 @@ def _mark_tab():
     try: cdp("Runtime.evaluate", expression="if(!document.title.startsWith('\U0001F7E2'))document.title='\U0001F7E2 '+document.title")
     except Exception: pass
 
-def switch_tab(target_id):
+def switch_tab(target):
+    # Accept either a raw targetId string or the dict returned by current_tab() / list_tabs(),
+    # so `switch_tab(current_tab())` works without a manual ["targetId"] dance.
+    target_id = target.get("targetId") if isinstance(target, dict) else target
     # Unmark old tab
     try: cdp("Runtime.evaluate", expression="if(document.title.startsWith('\U0001F7E2 '))document.title=document.title.slice(2)")
     except Exception: pass

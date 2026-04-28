@@ -35,16 +35,24 @@ Public surface (used by daemon.py, admin.py, helpers.py):
         kwargs for subprocess.Popen so the child detaches from this process's
         terminal/session. POSIX: start_new_session=True. Windows: DETACHED_PROCESS.
 """
-import asyncio, os, socket, subprocess, sys, tempfile, time
+import asyncio, os, re, socket, subprocess, sys, tempfile
 from pathlib import Path
 
 IS_WINDOWS = sys.platform == "win32"
 _TMP = Path(tempfile.gettempdir())
+_NAME_RE = re.compile(r"\A[A-Za-z0-9_-]{1,64}\Z")
 
 
-def log_path(name):  return _TMP / f"bu-{name}.log"
-def pid_path(name):  return _TMP / f"bu-{name}.pid"
-def port_path(name): return _TMP / f"bu-{name}.port"
+def _check(name):
+    if not _NAME_RE.match(name or ""):
+        raise ValueError(f"invalid BU_NAME {name!r}: must match [A-Za-z0-9_-]{{1,64}}")
+    return name
+
+
+def log_path(name):   return _TMP / f"bu-{_check(name)}.log"
+def pid_path(name):   return _TMP / f"bu-{_check(name)}.pid"
+def port_path(name):  return _TMP / f"bu-{_check(name)}.port"
+def _sock_path(name): return _TMP / f"bu-{_check(name)}.sock"
 
 
 def sock_addr(name):
@@ -52,9 +60,9 @@ def sock_addr(name):
     Windows returns "127.0.0.1:<port>" if the daemon is running, else
     the bare pipe-equivalent placeholder for log lines."""
     if not IS_WINDOWS:
-        return str(_TMP / f"bu-{name}.sock")
+        return str(_sock_path(name))
     try: return f"127.0.0.1:{port_path(name).read_text().strip()}"
-    except FileNotFoundError: return f"tcp:bu-{name}"
+    except FileNotFoundError: return f"tcp:bu-{_check(name)}"
 
 
 def spawn_kwargs():
@@ -70,9 +78,8 @@ def connect(name, timeout=1.0):
     Raises FileNotFoundError if the daemon isn't listening, TimeoutError on
     connect timeout."""
     if not IS_WINDOWS:
-        path = str(_TMP / f"bu-{name}.sock")
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(timeout); s.connect(path); return s
+        s.settimeout(timeout); s.connect(str(_sock_path(name))); return s
 
     # Windows: read port from sidecar file, then TCP-connect to 127.0.0.1.
     try:
@@ -90,7 +97,7 @@ async def serve(name, handler):
     """Run the daemon server until cancelled. `handler(reader, writer)` is the
     standard asyncio stream callback; transport is invisible to it."""
     if not IS_WINDOWS:
-        path = str(_TMP / f"bu-{name}.sock")
+        path = str(_sock_path(name))
         if os.path.exists(path): os.unlink(path)
         server = await asyncio.start_unix_server(handler, path=path)
         os.chmod(path, 0o600)
@@ -115,6 +122,6 @@ async def serve(name, handler):
 def cleanup_endpoint(name):
     """Remove the daemon's endpoint file. POSIX: unix socket. Windows: .port
     sidecar. Best-effort -- silent if already gone."""
-    p = (_TMP / f"bu-{name}.sock") if not IS_WINDOWS else port_path(name)
+    p = _sock_path(name) if not IS_WINDOWS else port_path(name)
     try: p.unlink()
     except FileNotFoundError: pass

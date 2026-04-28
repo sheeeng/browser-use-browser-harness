@@ -148,7 +148,7 @@ The *durable* shape of the site — the map, not the diary. Focus on what the ne
 ## Architecture
 
 ```text
-Chrome / Browser Use cloud -> CDP WS -> daemon.py -> bu-<NAME>.sock (POSIX) / \\.\pipe\bu-<NAME> (Windows) -> run.py
+Chrome / Browser Use cloud -> CDP WS -> daemon.py -> bu-<NAME>.sock (POSIX) / 127.0.0.1:<port> (Windows) -> run.py
 ```
 
 - Protocol is one JSON line each way.

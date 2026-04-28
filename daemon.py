@@ -1,4 +1,4 @@
-"""CDP WS holder + IPC relay (Unix socket on POSIX, named pipe on Windows). One daemon per BU_NAME."""
+"""CDP WS holder + IPC relay (Unix socket on POSIX, TCP loopback on Windows). One daemon per BU_NAME."""
 import asyncio, json, os, socket, sys, time, urllib.request
 from collections import deque
 from pathlib import Path
@@ -207,13 +207,18 @@ async def serve(d):
             writer.close()
 
     serve_task = asyncio.create_task(ipc.serve(NAME, handler))
+    stop_task = asyncio.create_task(d.stop.wait())
     await asyncio.sleep(0.05)  # let serve() bind so sock_addr() resolves to the live endpoint
     log(f"listening on {ipc.sock_addr(NAME)} (name={NAME}, remote={REMOTE_ID or 'local'})")
-    await d.stop.wait()
-    serve_task.cancel()
-    try: await serve_task
-    except (asyncio.CancelledError, Exception): pass
-    ipc.cleanup_endpoint(NAME)
+    try:
+        await asyncio.wait({serve_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
+        if serve_task.done(): await serve_task  # surfaces a serve crash
+    finally:
+        for t in (serve_task, stop_task):
+            t.cancel()
+            try: await t
+            except (asyncio.CancelledError, Exception): pass
+        ipc.cleanup_endpoint(NAME)
 
 
 async def main():

@@ -1,5 +1,5 @@
 ---
-name: browser-harness-install
+name: browser-install
 description: Install and bootstrap browser-harness into the current agent, then connect it to the user's real Chrome with minimal prompting.
 ---
 

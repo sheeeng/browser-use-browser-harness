@@ -1,5 +1,5 @@
 """CDP WS holder + IPC relay (Unix socket on POSIX, TCP loopback on Windows). One daemon per BU_NAME."""
-import asyncio, json, os, socket, sys, time, urllib.request
+import asyncio, json, os, socket, sys, time, urllib.error, urllib.request
 from collections import deque
 from pathlib import Path
 
@@ -93,8 +93,12 @@ def get_ws_url():
         raise RuntimeError(f"BU_CDP_URL={url} unreachable after 30s: {last_err} -- is the dedicated automation Chrome running?")
     for base in PROFILES:
         try:
-            port = (base / "DevToolsActivePort").read_text().strip().split("\n", 1)[0].strip()
+            active = (base / "DevToolsActivePort").read_text().splitlines()
         except (FileNotFoundError, NotADirectoryError):
+            continue
+        port = active[0].strip() if active else ""
+        ws_path = active[1].strip() if len(active) > 1 else ""
+        if not port:
             continue
         # Resolve the live WS URL via /json/version instead of trusting the path stored
         # alongside the port in DevToolsActivePort: if Chrome was previously launched
@@ -104,6 +108,12 @@ def get_ws_url():
         while time.time() < deadline:
             try:
                 return json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=1).read())["webSocketDebuggerUrl"]
+            except urllib.error.HTTPError as e:
+                # Chrome 147+ disables /json/* HTTP discovery on the default user-data-dir;
+                # the ws path Chrome wrote to DevToolsActivePort still works.
+                if e.code == 404 and ws_path:
+                    return f"ws://127.0.0.1:{port}{ws_path}"
+                time.sleep(1)
             except (OSError, KeyError, ValueError):
                 time.sleep(1)
         raise RuntimeError(

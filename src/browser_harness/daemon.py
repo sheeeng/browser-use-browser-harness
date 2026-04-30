@@ -34,6 +34,7 @@ PID = str(ipc.pid_path(NAME))
 BUF = 500
 PROFILES = [
     Path.home() / "Library/Application Support/Google/Chrome",
+    Path.home() / "Library/Application Support/Google/Chrome Canary",
     Path.home() / "Library/Application Support/Comet",
     Path.home() / "Library/Application Support/Arc/User Data",
     Path.home() / "Library/Application Support/Microsoft Edge",
@@ -52,6 +53,7 @@ PROFILES = [
     Path.home() / ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser",
     Path.home() / ".var/app/com.microsoft.Edge/config/microsoft-edge",
     Path.home() / "AppData/Local/Google/Chrome/User Data",
+    Path.home() / "AppData/Local/Google/Chrome SxS/User Data",
     Path.home() / "AppData/Local/Chromium/User Data",
     Path.home() / "AppData/Local/Microsoft/Edge/User Data",
     Path.home() / "AppData/Local/Microsoft/Edge Beta/User Data",

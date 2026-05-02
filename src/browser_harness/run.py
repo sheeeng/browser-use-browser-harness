@@ -85,7 +85,15 @@ def main():
     if len(args) < 2:
         sys.exit("Usage: browser-harness -c \"print(page_info())\"")
     print_update_banner()
-    if not daemon_alive() and not _local_chrome_listening() and os.environ.get("BROWSER_USE_API_KEY"):
+    # Auto-bootstrap a cloud browser is opt-in via BU_AUTOSPAWN — BROWSER_USE_API_KEY alone
+    # is not enough, since the key is commonly set for unrelated reasons (profile sync,
+    # cloud API calls, parent agents managing their own session).
+    if (
+        not daemon_alive()
+        and not _local_chrome_listening()
+        and os.environ.get("BROWSER_USE_API_KEY")
+        and os.environ.get("BU_AUTOSPAWN")
+    ):
         start_remote_daemon(NAME)
     ensure_daemon()
     exec(args[1], globals())

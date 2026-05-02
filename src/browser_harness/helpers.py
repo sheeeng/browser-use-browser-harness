@@ -360,9 +360,16 @@ def wait_for_element(selector, timeout=10.0, visible=False):
     Returns True if found, False on timeout.
     """
     if visible:
+        # checkVisibility walks the ancestor chain and respects display:none /
+        # visibility:hidden / opacity:0 on parents, which a getComputedStyle
+        # check on the element alone misses (it returns the descendant's own
+        # style, not the inherited "is this rendered" state). Falls back to
+        # the per-element CSS check on older Chrome that lacks checkVisibility.
         check = (
             f"(()=>{{const e=document.querySelector({json.dumps(selector)});"
             f"if(!e)return false;"
+            f"if(typeof e.checkVisibility==='function')"
+            f"return e.checkVisibility({{checkOpacity:true,checkVisibilityCSS:true}});"
             f"const s=getComputedStyle(e);"
             f"return s.display!=='none'&&s.visibility!=='hidden'&&s.opacity!=='0'}})()"
         )

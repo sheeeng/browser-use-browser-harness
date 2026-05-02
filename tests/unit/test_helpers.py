@@ -148,7 +148,7 @@ def test_wait_for_element_returns_false_on_timeout():
         assert helpers.wait_for_element("#missing", timeout=1.0) is False
 
 
-def test_wait_for_element_visible_uses_computed_style_check():
+def test_wait_for_element_visible_uses_check_visibility():
     js_exprs = []
 
     def fake_js(expr, **kwargs):
@@ -158,8 +158,10 @@ def test_wait_for_element_visible_uses_computed_style_check():
     with patch("browser_harness.helpers.js", side_effect=fake_js):
         helpers.wait_for_element("#btn", visible=True)
 
+    # Prefers checkVisibility (walks ancestor chain) with a computed-style
+    # fallback for older Chrome.
+    assert any("checkVisibility" in e for e in js_exprs)
     assert any("getComputedStyle" in e for e in js_exprs)
-    assert any("display" in e for e in js_exprs)
     # must NOT use offsetParent (fails for position:fixed elements)
     assert not any("offsetParent" in e for e in js_exprs)
 

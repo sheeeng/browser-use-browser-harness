@@ -54,7 +54,7 @@ Useful for stealth, sub-agents, or deployment.<br>
 
 PRs and improvements welcome. The best way to help: **contribute a new domain skill** under [agent-workspace/domain-skills/](agent-workspace/domain-skills/) for a site or task you use often (LinkedIn outreach, ordering on Amazon, filing expenses, etc.). Each skill teaches the agent the selectors, flows, and edge cases it would otherwise have to rediscover.
 
-- **Skills are off by default.** Domain skills are opt-in via `BH_DOMAIN_SKILLS=1` (set it before invoking `browser-harness`). The directory is community-curated and quality varies — defaulting off keeps the average run unaffected while preserving the contribution loop.
+- **Skills are off by default.** Domain skills are opt-in via `BH_DOMAIN_SKILLS=1` (set it before invoking `browser-harness`). The directory remains the place to contribute and browse skills.
 - **Skills are written by the harness, not by you.** Just run your task with the agent — when it figures something non-obvious out, it files the skill itself (see [SKILL.md](SKILL.md)). Please don't hand-author skill files; agent-generated ones reflect what actually works in the browser.
 - Open a PR with the generated `agent-workspace/domain-skills/<site>/` folder — small and focused is great.
 - Bug fixes, docs tweaks, and helper improvements are equally welcome.

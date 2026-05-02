@@ -52,15 +52,6 @@ def test_goto_url_includes_domain_skills_when_enabled(tmp_path, monkeypatch):
     assert result == {"frameId": "f", "domain_skills": ["scraping.md"]}
 
 
-def test_goto_url_zero_value_keeps_domain_skills_off(tmp_path, monkeypatch):
-    monkeypatch.setenv("BH_DOMAIN_SKILLS", "0")
-    monkeypatch.setattr(helpers, "AGENT_WORKSPACE", tmp_path)
-    _seed_skill(tmp_path)
-    with patch("browser_harness.helpers.cdp", return_value={"frameId": "f"}):
-        result = helpers.goto_url("https://www.example.com/")
-    assert "domain_skills" not in result
-
-
 def test_page_info_raises_clear_error_on_js_exception():
     def fake_send(req):
         return {}

@@ -225,7 +225,15 @@ def fill_input(selector, text, clear_first=True, timeout=0.0):
     if not focused:
         raise RuntimeError(f"fill_input: element not found: {selector!r}")
     if clear_first:
-        press_key("a", modifiers=4 if sys.platform == "darwin" else 2)  # Cmd+A on macOS, Ctrl+A elsewhere
+        # Dispatch select-all directly — NOT via press_key, which always emits a
+        # `char` event for single-char keys. With Ctrl/Cmd held, that `char`
+        # makes Chrome treat the input as a printable "a" instead of firing the
+        # select-all shortcut, leaving the field uncleared.
+        mods = 4 if sys.platform == "darwin" else 2  # Cmd on macOS, Ctrl elsewhere
+        select_all = {"key": "a", "code": "KeyA", "modifiers": mods,
+                      "windowsVirtualKeyCode": 65, "nativeVirtualKeyCode": 65}
+        cdp("Input.dispatchKeyEvent", type="rawKeyDown", **select_all)
+        cdp("Input.dispatchKeyEvent", type="keyUp", **select_all)
         press_key("Backspace")
     for ch in text:
         press_key(ch)

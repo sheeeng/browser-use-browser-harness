@@ -86,7 +86,9 @@ def test_fill_input_raises_when_element_not_found():
             helpers.fill_input("#missing", "hello")
 
 
-def test_fill_input_clear_first_sends_ctrl_a_backspace():
+def test_fill_input_clear_first_sends_select_all_then_backspace():
+    import sys
+
     key_events = []
 
     def fake_cdp(method, **kwargs):
@@ -101,9 +103,23 @@ def test_fill_input_clear_first_sends_ctrl_a_backspace():
          patch("browser_harness.helpers.js", side_effect=fake_js):
         helpers.fill_input("#inp", "x", clear_first=True)
 
-    keys_seen = [e.get("key") for e in key_events if e.get("type") == "keyDown"]
-    assert "a" in keys_seen
-    assert "Backspace" in keys_seen
+    # The "a" must be dispatched with the platform-correct modifier (Meta=4 on
+    # macOS, Ctrl=2 elsewhere). Without the modifier, the field would never get
+    # selected — it would just receive a literal "a".
+    expected_mod = 4 if sys.platform == "darwin" else 2
+    a_events = [e for e in key_events if e.get("key") == "a"]
+    assert a_events, "expected an 'a' key event for select-all"
+    assert all(e.get("modifiers") == expected_mod for e in a_events), \
+        f"select-all 'a' must carry modifiers={expected_mod}; got {[e.get('modifiers') for e in a_events]}"
+
+    # Crucial: no `char` event for the "a" — emitting one makes Chrome treat
+    # Cmd/Ctrl+A as a printable letter instead of a shortcut.
+    assert not any(e.get("type") == "char" and e.get("text") == "a" for e in key_events), \
+        "select-all must not emit a 'char' event with text='a' (would cancel the shortcut)"
+
+    # Backspace still fires (via press_key, which uses keyDown).
+    keys_down = [e.get("key") for e in key_events if e.get("type") in ("keyDown", "rawKeyDown")]
+    assert "Backspace" in keys_down
 
 
 def test_fill_input_no_clear_skips_ctrl_a():

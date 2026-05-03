@@ -162,7 +162,7 @@ def ensure_daemon(wait=60.0, name=None, env=None):
         msg = _log_tail(name) or ""
         if local and attempt == 0 and _needs_chrome_remote_debugging_prompt(msg):
             _open_chrome_inspect()
-            print("browser-harness: click Allow on chrome://inspect (and tick the checkbox if shown)", file=sys.stderr)
+            print('browser-harness: at chrome://inspect/#remote-debugging, tick "Allow remote debugging for this browser instance" and click Allow on the popup that appears', file=sys.stderr)
             restart_daemon(name)
             continue
         raise RuntimeError(msg or f"daemon {name or NAME} didn't come up -- check {ipc.log_path(name or NAME)}")
@@ -358,9 +358,9 @@ def sync_local_profile(profile_name, browser=None, cloud_profile_id=None,
                         include_domains=None, exclude_domains=None):
     """Sync a local profile's cookies to a cloud profile. Returns the cloud UUID.
 
-    Shells out to `profile-use sync` (v1.0.4+). Requires BROWSER_USE_API_KEY and the
-    target local Chrome profile to be closed (profile-use needs an exclusive lock on
-    the Cookies DB).
+    Shells out to `profile-use sync` (v1.0.5+). Requires BROWSER_USE_API_KEY.
+    profile-use copies the profile dir to a temp and syncs from the copy, so Chrome
+    can stay open.
 
     Args:
       profile_name:       local Chrome profile name (as shown by `list_local_profiles`).

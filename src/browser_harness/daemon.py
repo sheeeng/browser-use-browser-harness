@@ -58,6 +58,7 @@ PROFILES = [
     Path.home() / "AppData/Local/Microsoft/Edge Beta/User Data",
     Path.home() / "AppData/Local/Microsoft/Edge Dev/User Data",
     Path.home() / "AppData/Local/Microsoft/Edge SxS/User Data",
+    Path.home() / "AppData/Local/BraveSoftware/Brave-Browser/User Data",
 ]
 INTERNAL = ("chrome://", "chrome-untrusted://", "devtools://", "chrome-extension://", "about:")
 BU_API = "https://api.browser-use.com/api/v3"

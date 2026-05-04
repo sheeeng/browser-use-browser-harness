@@ -27,14 +27,31 @@ The card contains exactly two buttons:
 | "Continue with Google"   | Google   |
 | "Continue with GitHub"   | GitHub   |
 
-Both are `<button type="button">` inside a `<div class="px-6 pb-6 flex flex-col gap-3">`. Click by label text:
+Both are `<button type="button">` inside a `<div class="px-6 pb-6 flex flex-col gap-3">`. Locate by label text and click coordinates returned from the rendered element:
 
 ```python
+import json
+
+def click_button_by_text(label):
+    """Find a <button> by exact innerText and click its center."""
+    sel = json.dumps(label)
+    result = js(f"""
+      var b = Array.from(document.querySelectorAll("button"))
+                .find(e => (e.innerText || "").trim() === {sel});
+      if (!b) return null;
+      var r = b.getBoundingClientRect();
+      return JSON.stringify({{x: Math.round(r.x + r.width/2), y: Math.round(r.y + r.height/2)}});
+    """)
+    if result is None:
+        raise RuntimeError(f"button not found: {label!r} — has the React app finished hydrating?")
+    pos = json.loads(result)
+    click_at_xy(pos["x"], pos["y"])
+
 # Google
-click_at_xy(*find_text_coords("Continue with Google"))
+click_button_by_text("Continue with Google")
 
 # GitHub
-click_at_xy(*find_text_coords("Continue with GitHub"))
+click_button_by_text("Continue with GitHub")
 ```
 
 After clicking, a browser popup opens for the OAuth flow. **Stop and ask the user to complete sign-in** — do not attempt to interact with the OAuth popup window.

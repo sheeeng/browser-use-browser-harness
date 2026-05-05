@@ -243,3 +243,53 @@ def test_set_session_first_attach_runs_four_enables_in_parallel():
         f"first set_session must run 4 enables concurrently "
         f"(observed peak = {peak}). No Network.disable should fire."
     )
+
+
+def test_current_tab_meta_passes_attached_target_id():
+    """Regression for issue #304: helpers.current_tab() previously sent
+    Target.getTargetInfo with no targetId. The daemon strips session_id for
+    Target.* methods, so the call hit the browser-level connection with empty
+    params, and Chrome returned info about the *browser* target (empty
+    url/title) instead of the attached page. The daemon now resolves this
+    server-side using its tracked target_id."""
+    class _TargetInfoCDP(_FakeCDP):
+        async def send_raw(self, method, params=None, session_id=None):
+            self.calls.append((method, params, session_id))
+            if method == "Target.getTargetInfo":
+                return {"targetInfo": {
+                    "targetId": params["targetId"],
+                    "url": "https://example.com/",
+                    "title": "Example Domain",
+                    "type": "page",
+                }}
+            return {}
+
+    d = daemon.Daemon()
+    d.cdp = _TargetInfoCDP()
+    d.target_id = "page-target-abc"
+
+    result = asyncio.run(d.handle({"meta": "current_tab"}))
+
+    assert result == {
+        "targetId": "page-target-abc",
+        "url": "https://example.com/",
+        "title": "Example Domain",
+    }
+    # The targetId must be passed through — that's the whole point of the fix.
+    get_info_calls = [(p, s) for (m, p, s) in d.cdp.calls if m == "Target.getTargetInfo"]
+    assert get_info_calls == [({"targetId": "page-target-abc"}, None)]
+
+
+def test_current_tab_meta_returns_not_attached_when_no_target_id():
+    """Without an attached page, current_tab() has no meaningful answer.
+    Returning {error: not_attached} causes _send() to raise in helpers, which
+    is the right signal for callers like ensure_real_tab() that wrap the call
+    in try/except."""
+    d = _fresh_daemon()
+    d.target_id = None
+
+    result = asyncio.run(d.handle({"meta": "current_tab"}))
+
+    assert result == {"error": "not_attached"}
+    # No CDP call should have been issued.
+    assert d.cdp.calls == []

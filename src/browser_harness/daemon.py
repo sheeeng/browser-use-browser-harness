@@ -281,8 +281,21 @@ class Daemon:
                 }
             return {"target_id": self.target_id, "session_id": self.session, "page": page}
         if meta == "set_session":
+            old_session = self.session
             self.session = req.get("session_id")
             self.target_id = req.get("target_id") or self.target_id
+            # Best-effort: stop the previously-attached session from emitting
+            # Network events into the global buffer. wait_for_network_idle
+            # also filters by session_id on the consumer side, but disabling
+            # at the source keeps the buffer from filling with background-tab
+            # noise (e.g. a polling/SSE page the agent switched away from).
+            if old_session and old_session != self.session:
+                try:
+                    await asyncio.wait_for(
+                        self.cdp.send_raw("Network.disable", session_id=old_session),
+                        timeout=2,
+                    )
+                except Exception: pass
             # Mirror the initial-attach domain set so helpers that depend on
             # Network/DOM events (e.g. wait_for_network_idle) keep working
             # after switch_tab/new_tab. Initial attach does the same four.

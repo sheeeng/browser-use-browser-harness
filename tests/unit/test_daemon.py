@@ -86,3 +86,54 @@ def test_enable_default_domains_swallows_errors_per_domain():
     assert "DOM.enable" in attempted  # attempted, but raised
     assert "Runtime.enable" in attempted
     assert "Network.enable" in attempted
+
+
+def test_set_session_disables_network_on_old_session_before_enabling_new():
+    """When switching tabs, the previous session's Network domain must be
+    disabled so background tabs (polling, SSE, etc.) stop emitting events
+    into the global buffer that wait_for_network_idle reads. Initial attach
+    has no `old_session` so this disable doesn't fire then."""
+    d = _fresh_daemon()
+    d.session = "session-OLD"
+    d.target_id = "target-OLD"
+
+    asyncio.run(d.handle({
+        "meta": "set_session",
+        "session_id": "session-NEW",
+        "target_id": "target-NEW",
+    }))
+
+    disabled = [
+        (method, sid) for (method, _params, sid) in d.cdp.calls
+        if method == "Network.disable"
+    ]
+    assert disabled == [("Network.disable", "session-OLD")], (
+        f"Network.disable must fire on the old session before re-enabling on "
+        f"the new one. Got: {disabled}"
+    )
+
+    # Sanity: the new session still gets Network.enable.
+    enabled_on_new = {
+        method for (method, _p, sid) in d.cdp.calls
+        if sid == "session-NEW" and method.endswith(".enable")
+    }
+    assert "Network.enable" in enabled_on_new
+
+
+def test_set_session_does_not_disable_network_when_no_previous_session():
+    """First set_session call (e.g. very early in startup before any attach)
+    has no old_session — the Network.disable path must be skipped."""
+    d = _fresh_daemon()
+    d.session = None  # no prior attach
+
+    asyncio.run(d.handle({
+        "meta": "set_session",
+        "session_id": "session-FIRST",
+        "target_id": "target-FIRST",
+    }))
+
+    disables = [m for (m, _p, _s) in d.cdp.calls if m == "Network.disable"]
+    assert disables == [], (
+        f"Network.disable must not fire when there's no previous session "
+        f"to disable. Got: {disables}"
+    )

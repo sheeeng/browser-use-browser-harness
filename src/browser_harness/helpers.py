@@ -393,12 +393,20 @@ def wait_for_network_idle(timeout=10.0, idle_ms=500):
     Useful after form submits, SPA route transitions, and any action that triggers
     XHR/fetch without a visible DOM change. Builds on drain_events() — no daemon changes.
     Returns True if idle window reached, False on timeout.
+
+    Events are filtered to the active session — a previously-attached background
+    tab (e.g. a polling/SSE page the agent switched away from) keeps emitting
+    Network events into the daemon's global event buffer; without this filter
+    they would poison the idle check on the current tab.
     """
     deadline = time.time() + timeout
     last_activity = time.time()
     inflight = set()
+    active_session = _send({"meta": "session"}).get("session_id")
     while time.time() < deadline:
         for e in drain_events():
+            if e.get("session_id") != active_session:
+                continue
             method = e.get("method", "")
             params = e.get("params", {})
             if method == "Network.requestWillBeSent":

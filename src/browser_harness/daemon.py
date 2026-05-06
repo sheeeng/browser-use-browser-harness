@@ -275,6 +275,18 @@ class Daemon:
             out = list(self.events); self.events.clear()
             return {"events": out}
         if meta == "session":     return {"session_id": self.session}
+        if meta == "current_tab":
+            # Resolve the attached page's target info server-side. Helpers can't
+            # send Target.getTargetInfo themselves: daemon strips session_id for
+            # any Target.* method (browser-level call), and without a targetId
+            # Chrome silently returns the *browser* target.
+            if not self.target_id:
+                return {"error": "not_attached"}
+            try:
+                info = (await self.cdp.send_raw("Target.getTargetInfo", {"targetId": self.target_id}))["targetInfo"]
+            except Exception:
+                return {"error": "cdp_disconnected"}
+            return {"targetId": info.get("targetId"), "url": info.get("url", ""), "title": info.get("title", "")}
         if meta == "connection_status":
             if not self.target_id:
                 return {"error": "not_attached"}

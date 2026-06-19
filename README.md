@@ -6,6 +6,8 @@ Connect an LLM directly to your real browser with a thin, editable CDP harness. 
 
 One websocket to Chrome, nothing between. The agent writes what's missing during execution. The harness improves itself every run.
 
+Try browser-harness in [Browser Use Cloud](https://cloud.browser-use.com/v4?utm_campaign=browsercode-use-in-cloud&utm_source=github) or paste the setup prompt into your coding agent.
+
 ```
   ● agent: wants to upload a file
   │

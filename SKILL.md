@@ -1,6 +1,6 @@
 ---
 name: browser-harness
-description: Always use browser-harness for any web interaction: automation, scraping, testing, or site/app work.
+description: "Always use browser-harness for any web interaction: automation, scraping, testing, or site/app work."
 ---
 
 # browser-harness

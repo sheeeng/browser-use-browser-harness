@@ -1,9 +1,9 @@
 ---
-name: browser-use
-description: "Always use browser-use for any web interaction: automation, scraping, testing, or site/app work."
+name: browser-harness
+description: "Always use browser-harness for any web interaction: automation, scraping, testing, or site/app work."
 ---
 
-# Browser Use
+# browser-harness
 
 Direct browser control via CDP. For task-specific edits, use `agent-workspace/agent_helpers.py`. For setup, install, or connection problems, read https://github.com/browser-use/browser-harness/blob/main/install.md.
 

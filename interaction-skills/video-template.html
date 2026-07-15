@@ -73,7 +73,8 @@ const RADIUS = 12;
 const RAIL = H - 64;               // shared centerline: caption + chips sit on one rail
 const ACCENT = "#6ee7ff";
 const MONO = "ui-monospace, 'SF Mono', Menlo, monospace";
-const SANS = "ui-sans-serif, system-ui, -apple-system";
+const SANS = "'Helvetica Neue', ui-sans-serif, system-ui, -apple-system";
+const SERIF = "'Tiempos Headline', 'Tiempos Text', 'Iowan Old Style', Georgia, serif";
 
 const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
 const easeInOut = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
@@ -568,14 +569,14 @@ function drawCard(i, lt) {
   ctx.save();
   ctx.globalAlpha = a;
   const rise = (1 - aIn) * 16;
-  drawLogo(W / 2 - 42, H / 2 - 196 + rise, 84, INK, 1);
+  drawLogo(W / 2 - 40, H / 2 - 210 + rise, 80, INK, 1);
   ctx.fillStyle = INK; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.font = `800 68px ${SANS}`;
-  ctx.fillText(b.title || "", W / 2, H / 2 + 16 + rise);
+  ctx.font = `400 84px ${SERIF}`;   // editorial serif, regular weight
+  ctx.fillText(b.title || "", W / 2, H / 2 + 14 + rise);
   if (b.sub) {
-    ctx.font = `500 24px ${MONO}`;
-    ctx.globalAlpha = a * 0.65; ctx.fillStyle = INK;
-    ctx.fillText(b.sub, W / 2, H / 2 + 82 + rise);
+    ctx.font = `500 23px ${MONO}`;
+    ctx.globalAlpha = a * 0.6; ctx.fillStyle = INK;
+    ctx.fillText(b.sub, W / 2, H / 2 + 96 + rise);
     ctx.globalAlpha = a;
   }
   ctx.restore();

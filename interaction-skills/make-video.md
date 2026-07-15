@@ -44,7 +44,8 @@ A recording is a folder of numbered JPEG frames + `events.jsonl` — per action:
 ## Beats
 
 `window.COMPOSITION = {title, outro, outroSub, viewport, beats: [...]}` —
-schema at the top of the template.
+schema at the top of the template. `bg` sets the backdrop: one color = flat
+(default warm off-white), `[c1, c2]` = gradient; overlays/cards auto-adapt.
 
 - **Click beat**: the frame *before* the click (previous event's `frame`) +
   `cursor: {x, y}`, `click: true`, `zoom` on that point. The *next* beat

@@ -53,6 +53,8 @@ COMPOSITION = {
   redact: {                        // pixelate secrets wherever a frame shows
     "0010.jpg": [{x, y, w, h}],    // page-px regions per frame — tokens, IDs,
   },                               // the signed-in identity, emails
+  bg: "#F0EEE6",                   // backdrop: one color = flat (default is a
+                                   // warm off-white); [c1, c2] = soft gradient
 }
 Camera grammar: give consecutive action beats their own zoom targets and the
 camera drifts between them (one held shot). Use wide:true for reveals only.
@@ -219,16 +221,19 @@ function cursor(t) {
 const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
 
+const BG = Array.isArray(C.bg) ? C.bg : [C.bg || "#F0EEE6"];
+const LIGHT_BG = (() => {   // perceived luminance of the backdrop
+  const c = h => parseInt(h, 16);
+  const lum = s => { const h = s.replace("#", "");
+    return 0.299 * c(h.slice(0, 2)) + 0.587 * c(h.slice(2, 4)) + 0.114 * c(h.slice(4, 6)); };
+  return BG.reduce((a, s) => a + lum(s), 0) / BG.length > 128;
+})();
+const INK = LIGHT_BG ? "#1f1e1b" : "#ffffff";          // text/logo on the backdrop
 function drawBackdrop() {
+  if (BG.length < 2) { ctx.fillStyle = BG[0]; ctx.fillRect(0, 0, W, H); return; }
   const g = ctx.createLinearGradient(0, 0, W, H);
-  g.addColorStop(0, "#232a4d"); g.addColorStop(0.45, "#151b33"); g.addColorStop(1, "#0a0c18");
+  g.addColorStop(0, BG[0]); g.addColorStop(1, BG[1]);
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const bloom = ctx.createRadialGradient(W * 0.22, -H * 0.1, 0, W * 0.22, -H * 0.1, W * 0.75);
-  bloom.addColorStop(0, "rgba(130,150,255,0.14)"); bloom.addColorStop(1, "rgba(130,150,255,0)");
-  ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, H);
-  const r = ctx.createRadialGradient(W/2, H/2, H/3, W/2, H/2, H * 0.95);
-  r.addColorStop(0, "rgba(0,0,0,0)"); r.addColorStop(1, "rgba(0,0,0,0.4)");
-  ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
 }
 
 function roundRect(x, y, w, h, r) {
@@ -244,7 +249,8 @@ function roundRect(x, y, w, h, r) {
 // --- realistic Chrome window (macOS, light theme) ---
 function drawChromeWindow(i) {
   ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 70; ctx.shadowOffsetY = 28;
+  ctx.shadowColor = LIGHT_BG ? "rgba(40,35,25,0.3)" : "rgba(0,0,0,0.6)";
+  ctx.shadowBlur = LIGHT_BG ? 54 : 70; ctx.shadowOffsetY = LIGHT_BG ? 18 : 28;
   roundRect(FR.x, FR.y, FR.w, FR.h, RADIUS);
   ctx.fillStyle = "#DEE1E6"; ctx.fill();
   ctx.restore();
@@ -501,10 +507,12 @@ function drawTelemetry(t, i, lt) {
   }
   ctx.save();
   const px0 = 28, pw = W - 56, py = H - 12;
-  ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(px0, py, pw, 2);
-  ctx.fillStyle = "rgba(110,231,255,0.75)"; ctx.fillRect(px0, py, pw * (t / DURATION), 2);
+  ctx.fillStyle = LIGHT_BG ? "rgba(60,35,15,0.18)" : "rgba(255,255,255,0.1)";
+  ctx.fillRect(px0, py, pw, 2);
+  ctx.fillStyle = LIGHT_BG ? "rgba(60,35,15,0.6)" : "rgba(110,231,255,0.75)";
+  ctx.fillRect(px0, py, pw * (t / DURATION), 2);
   ctx.restore();
-  drawLogo(W - 60, H - 54, 30, "#ffffff", 0.45);
+  drawLogo(W - 60, H - 54, 30, INK, 0.5);
 }
 
 function drawCaption(t, i, lt) {
@@ -544,13 +552,15 @@ function drawCard(i, lt) {
   ctx.save();
   ctx.globalAlpha = a;
   const rise = (1 - aIn) * 16;
-  drawLogo(W / 2 - 42, H / 2 - 196 + rise, 84, "#ffffff", 1);
-  ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  drawLogo(W / 2 - 42, H / 2 - 196 + rise, 84, INK, 1);
+  ctx.fillStyle = INK; ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.font = `800 68px ${SANS}`;
   ctx.fillText(b.title || "", W / 2, H / 2 + 16 + rise);
   if (b.sub) {
-    ctx.font = `500 24px ${MONO}`; ctx.fillStyle = "#8fa3b8";
+    ctx.font = `500 24px ${MONO}`;
+    ctx.globalAlpha = a * 0.65; ctx.fillStyle = INK;
     ctx.fillText(b.sub, W / 2, H / 2 + 82 + rise);
+    ctx.globalAlpha = a;
   }
   ctx.restore();
 }

@@ -152,6 +152,11 @@ for (let i = 0; i < beats.length; i++) {
     const vw2 = W / (2 * s), vh2 = H / (2 * s);
     px = clamp(px, FR.x + Math.min(vw2, FR.w / 2), FR.x + FR.w - Math.min(vw2, FR.w / 2));
     py = clamp(py, FR.y + Math.min(vh2, FR.h / 2), FR.y + FR.h - Math.min(vh2, FR.h / 2));
+    // Snap to the window edge when the shot would slice just below/beside it —
+    // a sliver of cropped chrome reads as a broken screenshot; including the
+    // whole window frame keeps the "real browser" illusion at any zoom.
+    if (py - vh2 - FR.y < CHROME + 230 * FR.s) py = FR.y + Math.min(vh2, FR.h / 2);
+    if (px - vw2 - FR.x < 70 * FR.s) px = FR.x + Math.min(vw2, FR.w / 2);
     camTargets.push({ s, x: px, y: py });
   } else if (b.wide || i === 0 || beats[i - 1].card) camTargets.push(WIDE);
   else camTargets.push(camTargets[i - 1]);
@@ -215,14 +220,14 @@ const canvas = document.getElementById("stage");
 const ctx = canvas.getContext("2d");
 
 function drawBackdrop() {
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "#10141d"); g.addColorStop(1, "#0a0d13");
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, "#232a4d"); g.addColorStop(0.45, "#151b33"); g.addColorStop(1, "#0a0c18");
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = "rgba(160,190,255,0.055)";
-  for (let y = 20; y < H; y += 28)
-    for (let x = 20; x < W; x += 28) ctx.fillRect(x, y, 1.5, 1.5);
+  const bloom = ctx.createRadialGradient(W * 0.22, -H * 0.1, 0, W * 0.22, -H * 0.1, W * 0.75);
+  bloom.addColorStop(0, "rgba(130,150,255,0.14)"); bloom.addColorStop(1, "rgba(130,150,255,0)");
+  ctx.fillStyle = bloom; ctx.fillRect(0, 0, W, H);
   const r = ctx.createRadialGradient(W/2, H/2, H/3, W/2, H/2, H * 0.95);
-  r.addColorStop(0, "rgba(0,0,0,0)"); r.addColorStop(1, "rgba(0,0,0,0.45)");
+  r.addColorStop(0, "rgba(0,0,0,0)"); r.addColorStop(1, "rgba(0,0,0,0.4)");
   ctx.fillStyle = r; ctx.fillRect(0, 0, W, H);
 }
 
@@ -431,16 +436,12 @@ function drawCursor(t, i, lt) {
 
   if (b.click && lt >= clickAt) {
     const rt = clamp((lt - clickAt) / 0.5, 0, 1);
-    ctx.strokeStyle = `rgba(110,231,255,${0.6 * (1 - rt)})`; ctx.lineWidth = 1;
+    ctx.strokeStyle = `rgba(110,231,255,${0.5 * (1 - rt)})`; ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x - 54, y); ctx.lineTo(x - 12, y); ctx.moveTo(x + 12, y); ctx.lineTo(x + 54, y);
-    ctx.moveTo(x, y - 54); ctx.lineTo(x, y - 12); ctx.moveTo(x, y + 12); ctx.lineTo(x, y + 54);
+    ctx.moveTo(x - 34, y); ctx.lineTo(x - 12, y); ctx.moveTo(x + 12, y); ctx.lineTo(x + 34, y);
+    ctx.moveTo(x, y - 34); ctx.lineTo(x, y - 12); ctx.moveTo(x, y + 12); ctx.lineTo(x, y + 34);
     ctx.stroke();
-    ctx.font = `600 14px ${MONO}`;
-    ctx.fillStyle = `rgba(110,231,255,${0.9 * (1 - rt)})`;
-    ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-    if (b.cursor) ctx.fillText(`(${Math.round(b.cursor.x)}, ${Math.round(b.cursor.y)})`, x + 16, y - 16);
-    ctx.beginPath(); ctx.arc(x, y, 7 + easeOutCubic(rt) * 40, 0, 7);
+    ctx.beginPath(); ctx.arc(x, y, 7 + easeOutCubic(rt) * 34, 0, 7);
     ctx.strokeStyle = `rgba(255,255,255,${0.8 * (1 - rt)})`;
     ctx.lineWidth = 3 * (1 - rt) + 1; ctx.stroke();
   }
@@ -459,24 +460,27 @@ function drawCursor(t, i, lt) {
 // --- telemetry (screen space) ---
 function chip(x, y, parts, align = "left", error = false) {
   // parts: [[text, color], ...] rendered in one pill
-  ctx.font = `500 22px ${MONO}`;
+  ctx.font = `500 15px ${MONO}`;
   const texts = parts.map(p => p[0]);
-  const w = texts.reduce((a, s) => a + ctx.measureText(s).width, 0) + 28 + (parts.length - 1) * 14;
+  const w = texts.reduce((a, s) => a + ctx.measureText(s).width, 0) + 24 + (parts.length - 1) * 11;
   const bx = align === "right" ? x - w : x;
-  roundRect(bx, y, w, 44, 11);
-  ctx.fillStyle = error ? "rgba(46,10,14,0.9)" : "rgba(8,12,18,0.85)"; ctx.fill();
-  ctx.strokeStyle = error ? "rgba(255,90,90,0.55)" : "rgba(110,231,255,0.28)"; ctx.lineWidth = 1; ctx.stroke();
+  roundRect(bx, y, w, 30, 8);
+  ctx.fillStyle = error ? "rgba(46,10,14,0.85)" : "rgba(9,12,20,0.72)"; ctx.fill();
+  ctx.strokeStyle = error ? "rgba(255,90,90,0.5)" : "rgba(255,255,255,0.13)"; ctx.lineWidth = 1; ctx.stroke();
   ctx.textAlign = "left"; ctx.textBaseline = "middle";
-  let cx = bx + 14;
+  let cx = bx + 12;
   for (const [text, color] of parts) {
     ctx.fillStyle = color;
-    ctx.fillText(text, cx, y + 23);
-    cx += ctx.measureText(text).width + 14;
+    ctx.fillText(text, cx, y + 16);
+    cx += ctx.measureText(text).width + 11;
   }
 }
 function drawTelemetry(t, i, lt) {
   const b = beats[i];
   if (b.card) return;
+  // Chips live in the bottom corners, clear of the window chrome at any zoom;
+  // the caption owns the bottom center.
+  const cy = H - 52;
   if (b.label || b.error) {
     const parts = [];
     if (b.label) {
@@ -484,7 +488,7 @@ function drawTelemetry(t, i, lt) {
       parts.push([b.label, b.error ? "#ff6b6b" : ACCENT]);
     }
     if (b.error) parts.push(["⚠ ERROR", "#ff6b6b"]);
-    chip(28, 26, parts, "left", b.error);
+    chip(28, cy, parts, "left", b.error);
   }
   const bt = sticky(i, "t");
   if (bt != null) {
@@ -493,16 +497,14 @@ function drawTelemetry(t, i, lt) {
     const cur = beats[i].t != null ? beats[i].t : bt;
     const shown = next != null ? lerp(cur, next, clamp(lt / b.dur, 0, 1)) : cur;
     const m = Math.floor(shown / 60), s = Math.floor(shown % 60);
-    chip(W - 28, 26, [[`session ${m}:${String(s).padStart(2, "0")}`, "#d6e4ef"]], "right");
+    chip(W - 76, cy, [[`session ${m}:${String(s).padStart(2, "0")}`, "#d6e4ef"]], "right");
   }
   ctx.save();
-  const px0 = 28, pw = W - 56, py = H - 18;
-  ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(px0, py, pw, 2.5);
-  ctx.fillStyle = ACCENT; ctx.fillRect(px0, py, pw * (t / DURATION), 2.5);
-  ctx.fillStyle = "rgba(255,255,255,0.25)";
-  for (const s0 of starts) ctx.fillRect(px0 + pw * (s0 / DURATION), py - 1.5, 1, 5.5);
+  const px0 = 28, pw = W - 56, py = H - 12;
+  ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(px0, py, pw, 2);
+  ctx.fillStyle = "rgba(110,231,255,0.75)"; ctx.fillRect(px0, py, pw * (t / DURATION), 2);
   ctx.restore();
-  drawLogo(W - 66, H - 66, 36, "#ffffff", 0.4);
+  drawLogo(W - 60, H - 54, 30, "#ffffff", 0.45);
 }
 
 function drawCaption(t, i, lt) {
@@ -512,20 +514,24 @@ function drawCaption(t, i, lt) {
   if (k <= 0) return;
   ctx.save();
   ctx.globalAlpha = k;
-  let fs = 72;
-  ctx.font = `800 ${fs}px ${SANS}`;
-  while (ctx.measureText(b.caption).width > W * 0.86 && fs > 44) {
-    fs -= 4; ctx.font = `800 ${fs}px ${SANS}`;
+  let fs = 34;
+  ctx.font = `600 ${fs}px ${SANS}`;
+  while (ctx.measureText(b.caption).width > W * 0.6 && fs > 24) {
+    fs -= 2; ctx.font = `600 ${fs}px ${SANS}`;
   }
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  const ph = fs * 1.5;
-  const y = H - 40 - ph / 2 + (1 - k) * 20;
+  const ph = fs * 1.9;
+  const y = H - 34 - ph / 2 + (1 - k) * 14;
   const w = ctx.measureText(b.caption).width;
-  roundRect(W / 2 - w / 2 - 38, y - ph / 2, w + 76, ph, 20);
-  ctx.fillStyle = b.error ? "rgba(52,10,14,0.9)" : "rgba(8,10,15,0.84)"; ctx.fill();
-  ctx.strokeStyle = b.error ? "rgba(255,90,90,0.6)" : "rgba(255,255,255,0.12)"; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 6;
+  roundRect(W / 2 - w / 2 - 26, y - ph / 2, w + 52, ph, ph / 2);
+  ctx.fillStyle = b.error ? "rgba(52,10,14,0.9)" : "rgba(10,12,18,0.82)"; ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = b.error ? "rgba(255,90,90,0.55)" : "rgba(255,255,255,0.14)"; ctx.lineWidth = 1;
+  roundRect(W / 2 - w / 2 - 26, y - ph / 2, w + 52, ph, ph / 2); ctx.stroke();
   ctx.fillStyle = b.error ? "#ffd7d7" : "#fff";
-  ctx.fillText(b.caption, W / 2, y + 2);
+  ctx.fillText(b.caption, W / 2, y + 1);
   ctx.restore();
 }
 

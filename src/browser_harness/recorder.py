@@ -13,14 +13,15 @@ active state across CLI invocations (the daemon is untouched). run.py calls
 observe() after every traced helper; only helpers in ACTIONS produce a
 frame. Recording failures are swallowed — they must never break the run.
 
-BH_RECORD=1 additionally auto-records every session without an explicit
+By default every session is auto-recorded without an explicit
 start_recording(): recordings are named session-<timestamp> and roll over
 to a fresh one after BH_RECORD_IDLE seconds (default 180) without actions.
+BH_RECORD=0 turns auto-recording off.
 
 Turning a recording into a video is the make-video skill's job:
 interaction-skills/make-video.md.
 """
-import base64, json, os, time
+import base64, json, os, re, time
 from pathlib import Path
 
 from . import paths
@@ -37,6 +38,20 @@ ACTIONS = {
 
 _TEXT_LIMIT = 500
 _SETTLE_SECONDS = 0.15  # let the page paint before the post-action frame
+
+# Credential-bearing query/fragment params (OAuth codes, tokens, session
+# state) are scrubbed from every URL written to events.jsonl — auth redirects
+# otherwise land real secrets in a folder people share.
+_URL_SECRETS = re.compile(
+    r"([?&#](?:code|access_token|id_token|refresh_token|token|assertion"
+    r"|client_secret|client_info|session_state|api_?key|sig|signature"
+    r"|auth|authorization|password|secret)=)[^&#]+",
+    re.IGNORECASE,
+)
+
+
+def _scrub_url(url):
+    return _URL_SECRETS.sub(r"\1REDACTED", str(url))
 
 # Page context per event. The focused-element box is what lets a video zoom
 # in on the input the agent is typing into; `input` flags password fields
@@ -100,9 +115,10 @@ def recording_dir():
 
 
 def _auto_enabled():
-    """Auto-record every session only when BH_RECORD is set truthy. Off by
-    default — normal opt-in is the user asking, which maps to start_recording()."""
-    return os.environ.get("BH_RECORD", "0").strip().lower() in ("1", "true", "yes", "on")
+    """Auto-record every session unless BH_RECORD is set falsy. On by default —
+    recording is cheap (one jpg per action) and making a video stays a separate,
+    deliberate step; BH_RECORD=0 opts out entirely."""
+    return os.environ.get("BH_RECORD", "1").strip().lower() not in ("0", "false", "no", "off")
 
 
 # Auto-recordings roll over after this idle gap — a pause since the last action
@@ -173,6 +189,9 @@ def _capture(d, helper, args=(), kwargs=None, duration=None):
     except Exception:
         pass
     event.update(_details(helper, args, kwargs or {}, event))
+    for k in ("url", "to"):
+        if k in event:
+            event[k] = _scrub_url(event[k])
     try:
         shot = helpers.cdp("Page.captureScreenshot", format="jpeg", quality=80)
         frame = f"{sum(1 for _ in d.glob('*.jpg')) + 1:04d}.jpg"

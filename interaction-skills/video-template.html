@@ -49,7 +49,10 @@ COMPOSITION = {
                                    // shake + vignette — make failures obvious
     fade: 0.1,                     // crossfade seconds (default: 0 on url change,
                                    // 0.1 otherwise)
-  }, ...]
+  }, ...],
+  redact: {                        // pixelate secrets wherever a frame shows
+    "0010.jpg": [{x, y, w, h}],    // page-px regions per frame — tokens, IDs,
+  },                               // the signed-in identity, emails
 }
 Camera grammar: give consecutive action beats their own zoom targets and the
 camera drifts between them (one held shot). Use wide:true for reveals only.
@@ -346,22 +349,50 @@ function drawContent(t, i, lt) {
   const prevSrc = i > 0 && !beats[i - 1].card ? finalFrame(i - 1) : null;
   const fd = fadeDur(i);
   let base = images.get(b.frame);
+  const shown = [];
   if (prevSrc && fd > 0 && lt < fd && prevSrc !== b.frame) {
     drawPage(images.get(prevSrc));
+    shown.push(prevSrc);
     ctx.globalAlpha = clamp(lt / fd, 0, 1);
   }
-  if (base) drawPage(base);
+  if (base) { drawPage(base); shown.push(b.frame); }
   ctx.globalAlpha = 1;
+  let vis = base;
   // in-beat consequence: swap to `after` once the click lands
   if (b.after) {
     const at = b.click ? clickTime(i) + 0.22 : b.dur * 0.4;
     const k = clamp((lt - at) / 0.05, 0, 1);
-    if (k > 0) { ctx.globalAlpha = k; drawPage(images.get(b.after)); ctx.globalAlpha = 1; }
+    if (k > 0) {
+      const im = images.get(b.after);
+      ctx.globalAlpha = k; drawPage(im); ctx.globalAlpha = 1;
+      if (im) { vis = im; if (k >= 1) shown.length = 0; shown.push(b.after); }
+    }
   }
+  if (C.redact && vis)
+    for (const src of shown)
+      for (const r of C.redact[src] || []) drawRedact(r, vis);
   if (b.type) drawTyping(b, lt);
   ctx.restore();
 }
 function drawPage(im) { if (im) ctx.drawImage(im, FR.x, FR.y + CHROME, FR.w, VH() * FR.s); }
+
+// Pixelate a page-px region: downsample it from the source frame into coarse
+// mosaic cells, so covered text stays unrecoverable at any zoom.
+const redactBuf = document.createElement("canvas");
+function drawRedact(r, im) {
+  const x = pageX(r.x), y = pageY(r.y), w = r.w * FR.s, h = r.h * FR.s;
+  if (w < 2 || h < 2) return;
+  const k = im.width / VW();  // page px -> frame image px (dpr)
+  const pw = Math.max(2, Math.round(r.w / 14)), ph = Math.max(2, Math.round(r.h / 14));
+  redactBuf.width = pw; redactBuf.height = ph;
+  redactBuf.getContext("2d").drawImage(im, r.x * k, r.y * k, r.w * k, r.h * k, 0, 0, pw, ph);
+  ctx.save();
+  roundRect(x, y, w, h, 5); ctx.clip();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(redactBuf, 0, 0, pw, ph, x, y, w, h);
+  ctx.imageSmoothingEnabled = true;
+  ctx.restore();
+}
 
 function drawTyping(b, lt) {
   const { box, text } = b.type;

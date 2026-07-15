@@ -66,14 +66,14 @@ def test_observe_ignores_readonly_helpers(workspace, fake_png):
     assert [e["helper"] for e in _events(rec)] == ["start_recording"]
 
 
-def test_observe_is_noop_by_default(workspace, monkeypatch):
-    monkeypatch.delenv("BH_RECORD", raising=False)
+def test_observe_is_noop_when_opted_out(workspace, monkeypatch):
+    monkeypatch.setenv("BH_RECORD", "0")
     recorder.observe("click_at_xy", (1, 2), {})
     assert not (workspace / "recordings").exists() or not list((workspace / "recordings").glob("*/events.jsonl"))
 
 
-def test_observe_auto_records_when_bh_record_set(workspace, monkeypatch, fake_png):
-    monkeypatch.setenv("BH_RECORD", "1")
+def test_observe_auto_records_by_default(workspace, monkeypatch, fake_png):
+    monkeypatch.delenv("BH_RECORD", raising=False)
     js_p, cdp_p = _record(fake_png)
     with js_p, cdp_p:
         recorder.observe("click_at_xy", (640, 412), {}, 0.1)
@@ -161,3 +161,18 @@ def test_kwargs_and_defaults_in_details(workspace, fake_png):
     scroll, nav = _events(rec)[1:]
     assert (scroll["x"], scroll["y"], scroll["dy"], scroll["dx"]) == (10, 20, -300, 0)
     assert nav["to"] == "https://a.example"
+
+
+def test_urls_are_scrubbed_of_credentials(workspace, fake_png):
+    leaky = ("https://portal.example/auth/login/#code=1.SECRETJWT"
+             "&client_info=eyJ1aWQ&session_state=deadbeef&correlation_id=ok123")
+    js_p, cdp_p = _record(fake_png, ctx=_ctx(url=leaky))
+    with js_p, cdp_p:
+        rec = recorder.start_recording("session")
+        recorder.observe("new_tab", ("https://x.example/?api_key=sk-live-42",), {})
+    event = _events(rec)[1]
+    assert "SECRETJWT" not in json.dumps(event)
+    assert "sk-live-42" not in json.dumps(event)
+    assert event["url"].startswith("https://portal.example/auth/login/#code=REDACTED")
+    assert "correlation_id=ok123" in event["url"]  # non-credential params survive
+    assert event["to"] == "https://x.example/?api_key=REDACTED"

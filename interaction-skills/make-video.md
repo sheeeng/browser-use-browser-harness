@@ -35,6 +35,11 @@ A recording is a folder of numbered JPEG frames + `events.jsonl` — per action:
   — the template sequences camera → cursor → click → result for you.
 - **End on the payoff + flex**: final state wide, then `outro`/`outroSub`
   ("Done in 4m 28s").
+- **Hide secrets before anything else.** Scan every frame you use for
+  tokens, API keys, account/tenant IDs, emails, the signed-in identity chip
+  — list them in `redact: {"0010.jpg": [{x, y, w, h}]}` (page px, per frame)
+  and the template pixelates them wherever that frame shows. Zooming into a
+  secret is the worst leak: check your zoom targets first.
 
 ## Beats
 

@@ -95,11 +95,17 @@ Cloud profile cookie sync reference: https://github.com/browser-use/browser-harn
 
 ## Recording Videos
 
-If the user asks to record a task or wants a video of it ("record this",
-"show me a video after"), call `start_recording(name, title=...)` before the
-first action and `stop_recording()` when done. One screenshot + trace line
-per action, persisted across calls. `BH_RECORD=1` auto-records every session
-instead. To edit a recording into a short, engaging video, read
+Every session is auto-recorded (one screenshot + trace line per action,
+persisted across calls) into `$BH_AGENT_WORKSPACE/recordings/session-*`;
+`BH_RECORD=0` turns this off. For a deliberate take, call
+`start_recording(name, title=...)` before the first action and
+`stop_recording()` when done.
+
+Making a video is separate and discretionary: do it when the user asks, or
+offer one when the session accomplished something worth replaying (a real
+multi-step task, a purchase, a fix, a surprising failure). Don't produce
+videos for trivial lookups or a couple of navigations. To edit a recording
+into a short, engaging video, read
 https://github.com/browser-use/browser-harness/blob/main/interaction-skills/make-video.md.
 
 ## Interaction Skills

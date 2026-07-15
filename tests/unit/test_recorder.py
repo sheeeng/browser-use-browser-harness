@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,6 +12,7 @@ from browser_harness import recorder
 def workspace(tmp_path, monkeypatch):
     monkeypatch.setenv("BH_AGENT_WORKSPACE", str(tmp_path))
     monkeypatch.setenv("BU_NAME", "testrec")
+    monkeypatch.setenv("BH_RECORD", "0")  # opt out of auto-record; tests drive it explicitly
     monkeypatch.setattr(recorder, "_SETTLE_SECONDS", 0)
     return tmp_path
 
@@ -64,9 +66,65 @@ def test_observe_ignores_readonly_helpers(workspace, fake_png):
     assert [e["helper"] for e in _events(rec)] == ["start_recording"]
 
 
-def test_observe_is_noop_without_active_recording(workspace):
+def test_observe_is_noop_by_default(workspace, monkeypatch):
+    monkeypatch.delenv("BH_RECORD", raising=False)
     recorder.observe("click_at_xy", (1, 2), {})
     assert not (workspace / "recordings").exists() or not list((workspace / "recordings").glob("*/events.jsonl"))
+
+
+def test_observe_auto_records_when_bh_record_set(workspace, monkeypatch, fake_png):
+    monkeypatch.setenv("BH_RECORD", "1")
+    js_p, cdp_p = _record(fake_png)
+    with js_p, cdp_p:
+        recorder.observe("click_at_xy", (640, 412), {}, 0.1)
+        recorder.observe("goto_url", ("https://a.example",), {})
+    recs = list((workspace / "recordings").glob("session-*"))
+    assert len(recs) == 1
+    events = _events(recs[0])
+    assert [e["helper"] for e in events] == ["click_at_xy", "goto_url"]
+    assert json.loads((recs[0] / "meta.json").read_text())["auto"] is True
+
+
+def test_auto_record_accumulates_across_calls(workspace, monkeypatch, fake_png):
+    monkeypatch.setenv("BH_RECORD", "1")
+    js_p, cdp_p = _record(fake_png)
+    with js_p, cdp_p:
+        recorder.observe("click_at_xy", (1, 2), {})
+        first = recorder.recording_dir()
+        recorder.observe("click_at_xy", (3, 4), {})
+    # same recording reused, not a second dir
+    assert len(list((workspace / "recordings").glob("session-*"))) == 1
+    assert len(_events(first)) == 2
+
+
+def test_auto_record_rolls_over_after_idle_gap(workspace, monkeypatch, fake_png):
+    monkeypatch.setenv("BH_RECORD", "1")
+    monkeypatch.setenv("BH_RECORD_IDLE", "0")  # any elapsed time counts as stale
+    js_p, cdp_p = _record(fake_png)
+    with js_p, cdp_p:
+        recorder.observe("click_at_xy", (1, 2), {})
+        first = recorder.recording_dir()
+        # backdate the frame so the next observe sees the recording as idle
+        for f in Path(first).glob("*.jpg"):
+            os.utime(f, (0, 0))
+        recorder.observe("click_at_xy", (3, 4), {})
+        second = recorder.recording_dir()
+    assert second != first
+    assert len(list((workspace / "recordings").glob("session-*"))) == 2
+
+
+def test_explicit_recording_never_rolls_over(workspace, monkeypatch, fake_png):
+    monkeypatch.setenv("BH_RECORD", "1")
+    monkeypatch.setenv("BH_RECORD_IDLE", "0")
+    js_p, cdp_p = _record(fake_png)
+    with js_p, cdp_p:
+        rec = recorder.start_recording("keeper")
+        for f in Path(rec).glob("*.jpg"):
+            os.utime(f, (0, 0))
+        recorder.observe("click_at_xy", (3, 4), {})
+    # explicit recording is not auto, so it stays put — no session-* sibling
+    assert recorder.recording_dir() == rec
+    assert not list((workspace / "recordings").glob("session-*"))
 
 
 def test_typing_records_focused_element_box_and_masks_passwords(workspace, fake_png):

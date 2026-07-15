@@ -13,6 +13,10 @@ active state across CLI invocations (the daemon is untouched). run.py calls
 observe() after every traced helper; only helpers in ACTIONS produce a
 frame. Recording failures are swallowed — they must never break the run.
 
+BH_RECORD=1 additionally auto-records every session without an explicit
+start_recording(): recordings are named session-<timestamp> and roll over
+to a fresh one after BH_RECORD_IDLE seconds (default 180) without actions.
+
 Turning a recording into a video is the make-video skill's job:
 interaction-skills/make-video.md.
 """
@@ -95,14 +99,63 @@ def recording_dir():
     return d if Path(d).is_dir() else None
 
 
+def _auto_enabled():
+    """Auto-record every session only when BH_RECORD is set truthy. Off by
+    default — normal opt-in is the user asking, which maps to start_recording()."""
+    return os.environ.get("BH_RECORD", "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+# Auto-recordings roll over after this idle gap — a pause since the last action
+# marks the end of one task and the start of the next, so a naive always-on
+# recording doesn't merge unrelated sessions or grow forever.
+def _auto_idle_gap():
+    try:
+        return float(os.environ.get("BH_RECORD_IDLE", "180"))
+    except ValueError:
+        return 180.0
+
+
+def _auto_start():
+    """Begin an auto-recording silently — no stdout (agents parse it)."""
+    stamp = time.strftime("session-%Y%m%d-%H%M%S")
+    name, n = stamp, 2
+    while (_recordings_root() / name).exists():  # avoid same-second collisions
+        name = f"{stamp}-{n}"; n += 1
+    d = _recordings_root() / name
+    d.mkdir(parents=True, exist_ok=True)
+    meta = {"name": name, "title": None, "started": round(time.time(), 3), "auto": True}
+    (d / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    _marker().write_text(str(d), encoding="utf-8")
+    return d
+
+
+def _auto_is_stale(d):
+    """True if the active auto-recording has gone idle past the rollover gap."""
+    try:
+        if not json.loads((Path(d) / "meta.json").read_text()).get("auto"):
+            return False  # explicit start_recording() never auto-rolls
+        frames = list(Path(d).glob("*.jpg"))
+        if not frames:
+            return False
+        newest = max(f.stat().st_mtime for f in frames)
+        return (time.time() - newest) > _auto_idle_gap()
+    except Exception:
+        return False
+
+
 def observe(name, args, kwargs, duration=None):
     """Called by run.py after each traced helper succeeds. Never raises."""
     if name not in ACTIONS:
         return
     try:
         d = recording_dir()
+        if d is not None and _auto_is_stale(d):
+            _marker().unlink(missing_ok=True)
+            d = None
         if d is None:
-            return
+            if not _auto_enabled():
+                return
+            d = str(_auto_start())
         time.sleep(_SETTLE_SECONDS)
         _capture(Path(d), name, args, kwargs, duration)
     except Exception:

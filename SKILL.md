@@ -95,9 +95,14 @@ Cloud profile cookie sync reference: https://github.com/browser-use/browser-harn
 
 ## Recording Videos
 
-`start_recording(name, title=...)` records the session — one screenshot + one
-trace line per action, into a folder that survives across calls — until
-`stop_recording()`. To edit a recording into a short, engaging video, read
+If the user asks to record, replay, or get a video of a task — even casually
+("record this", "show me a video after") — call `start_recording(name,
+title=...)` BEFORE the first action. It records the session (one screenshot +
+one trace line per action, into a folder that survives across calls) until
+`stop_recording()`. With `BH_RECORD=1` set, every session auto-records
+without an explicit start (recordings roll over after `BH_RECORD_IDLE`
+seconds idle, default 180). To edit a recording into a short, engaging video,
+read
 https://github.com/browser-use/browser-harness/blob/main/interaction-skills/make-video.md.
 
 ## Interaction Skills

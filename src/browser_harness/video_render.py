@@ -170,14 +170,36 @@ def inspect_mode(name, reduced):
     return {{'preflight': preflight, 'clicks': clicks, 'captures': captures,
             'clickCaptures': click_captures}}
 
-target = new_tab(cfg['url'])
-wait_for_load()
-ready()
-normal = inspect_mode('normal', False)
-reduced = inspect_mode('reduced', True)
-cdp('Emulation.setEmulatedMedia', media='', features=[])
-close_tab(target)
-print(cfg['marker'] + json.dumps({{'normal': normal, 'reduced': reduced}}))
+try:
+    previous = current_tab()['targetId']
+except Exception:
+    previous = None
+target = None
+try:
+    target = new_tab()
+    goto_url(cfg['url'])
+    wait_for_load()
+    ready()
+    normal = inspect_mode('normal', False)
+    reduced = inspect_mode('reduced', True)
+    print(cfg['marker'] + json.dumps({{'normal': normal, 'reduced': reduced}}))
+finally:
+    try:
+        cdp('Emulation.setEmulatedMedia', media='', features=[])
+    except Exception:
+        pass
+    try:
+        switch_tab(previous) if previous else new_tab()
+    except Exception:
+        try:
+            new_tab()
+        except Exception:
+            pass
+    if target is not None:
+        try:
+            close_tab(target)
+        except Exception:
+            pass
 """
     return run_harness(code, timeout=max(60, len(samples) * 3))
 
@@ -315,7 +337,12 @@ def _start_export(recording: Path, url: str, webm: Path) -> dict:
     code = f"""
 import json, time
 cfg = json.loads({json.dumps(json.dumps(payload))})
-target = new_tab(cfg['url'])
+try:
+    previous = current_tab()['targetId']
+except Exception:
+    previous = None
+target = new_tab()
+goto_url(cfg['url'])
 wait_for_load()
 for _ in range(100):
     if js('window.videoReady && window.videoReady()'):
@@ -333,24 +360,38 @@ started = js('''(() => {{
     .catch(error => window.__exportError = String(error));
   return true;
 }})()''')
-print(cfg['marker'] + json.dumps({{'target': target, 'preflight': preflight, 'clicks': clicks, 'started': started}}))
+print(cfg['marker'] + json.dumps({{'target': target, 'previous': previous, 'preflight': preflight, 'clicks': clicks, 'started': started}}))
 """
     return run_harness(code, timeout=30)
 
 
-def _close_editor(url: str) -> None:
+def _close_editor(url: str, previous: str | None = None) -> bool:
+    payload = {"url": url, "previous": previous, "marker": MARKER}
     code = f"""
 import json
-url = {json.dumps(url)}
-for tab in list_tabs():
-    if tab.get('url') == url:
-        close_tab(tab)
-print({json.dumps(MARKER)} + json.dumps({{'closed': True}}))
-"""
+cfg = json.loads({json.dumps(json.dumps(payload))})
+downloads_reset = True
+try:
+    cdp('Browser.setDownloadBehavior', behavior='default', eventsEnabled=False)
+except Exception:
+    downloads_reset = False
+targets = [tab for tab in list_tabs() if tab.get('url') == cfg['url']]
+try:
+    switch_tab(cfg['previous']) if cfg.get('previous') else new_tab()
+except Exception:
+    new_tab()
+for tab in targets:
     try:
-        run_harness(code, timeout=15)
+        close_tab(tab)
     except Exception:
         pass
+print(cfg['marker'] + json.dumps({{'closed': True, 'downloadsReset': downloads_reset}}))
+"""
+    try:
+        result = run_harness(code, timeout=15)
+    except Exception:
+        return False
+    return result.get("downloadsReset") is True
 
 
 def _run(command: list[str], cwd: Path, timeout: float = 120) -> subprocess.CompletedProcess:
@@ -409,6 +450,7 @@ def export(recording: Path, output_name: str, reviewed: bool) -> int:
     expected = sum(float(beat.get("dur") or 0) for beat in comp.get("beats") or [])
     started = time.monotonic()
     with serve(recording) as url:
+        browser = None
         try:
             browser = _start_export(recording, url, webm)
             if browser["preflight"].get("errors"):
@@ -429,7 +471,10 @@ def export(recording: Path, output_name: str, reviewed: bool) -> int:
             else:
                 raise RuntimeError(f"timed out waiting for {webm}")
         finally:
-            _close_editor(url)
+            if not _close_editor(url, (browser or {}).get("previous")):
+                raise RuntimeError(
+                    "could not restore Chrome download behavior; restart Chrome"
+                )
     capture_seconds = time.monotonic() - started
 
     conversion_started = time.monotonic()

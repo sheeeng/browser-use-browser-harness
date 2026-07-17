@@ -99,6 +99,8 @@ def start_recording(name=None, title=None):
     stop_recording(). Survives across CLI invocations. Returns the recording
     directory. `title` is used later as the video title.
     See interaction-skills/make-video.md to turn the recording into a video."""
+    if _env_override() is False:
+        raise RuntimeError("recording disabled by BH_RECORD=0")
     name = name or time.strftime("rec-%Y%m%d-%H%M%S")
     d = _recordings_root() / name
     d.mkdir(parents=True, exist_ok=True)

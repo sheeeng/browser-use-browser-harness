@@ -90,6 +90,7 @@ EXPLANATION_KEYS = {
 TYPE_HELPERS = {"type_text", "fill", "fill_input"}
 CLICK_HELPERS = {"click_at_xy"}
 REDACTION_KEYS = {"x", "y", "w", "h", "fill", "stroke", "radius", "pad"}
+VIEWPORT_TOLERANCE = 2
 
 
 class BriefError(ValueError):
@@ -248,7 +249,12 @@ def event_target(event: dict[str, Any]) -> dict[str, float] | None:
 
 def require_matching_viewport(event: dict[str, Any], viewport: dict[str, Any], where: str) -> None:
     candidate = event.get("viewport") or {}
-    if candidate.get("w") != viewport.get("w") or candidate.get("h") != viewport.get("h"):
+    try:
+        dw = abs(float(candidate["w"]) - float(viewport["w"]))
+        dh = abs(float(candidate["h"]) - float(viewport["h"]))
+    except (KeyError, TypeError, ValueError):
+        raise BriefError(f"{where} has no valid viewport") from None
+    if dw > VIEWPORT_TOLERANCE or dh > VIEWPORT_TOLERANCE:
         raise BriefError(f"{where} uses a different viewport; split or normalize the recording first")
 
 
@@ -296,6 +302,38 @@ def add_raw_to_card_holds(beats: list[dict[str, Any]], pacing: dict[str, Any]) -
         beat["dur"] = round(float(beat["dur"]) + hold, 3)
         count += 1
     return count
+
+
+def validate_narration_cadence(beats: list[dict[str, Any]]) -> None:
+    """Keep narration semantic and sticky instead of mirroring every frame."""
+
+    segments: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    for beat in beats:
+        if beat.get("card"):
+            if current:
+                segments.append(current)
+                current = []
+        else:
+            current.append(beat)
+    if current:
+        segments.append(current)
+
+    for segment in segments:
+        cues = [beat for beat in segment if beat.get("narration")]
+        if len(segment) >= 3 and len(cues) > math.ceil(len(segment) / 2):
+            raise BriefError(
+                "narration is sticky: set it only when the thought changes, then "
+                "omit it while 2–3 screenshots advance underneath"
+            )
+        consecutive = 0
+        for beat in segment:
+            consecutive = consecutive + 1 if beat.get("narration") else 0
+            if consecutive >= 3:
+                raise BriefError(
+                    "three consecutive actions change narration; omit narration on "
+                    "intervening actions so text and screenshots use different pacing"
+                )
 
 
 def compile_action(
@@ -539,6 +577,7 @@ def compile_brief(summary: dict[str, Any], brief: dict[str, Any], style: dict[st
         }
     )
 
+    validate_narration_cadence(beats)
     raw_to_card_count = add_raw_to_card_holds(beats, pacing)
     budget = duration_budget(
         len(actions), len(explanations), raw_to_card_count, pacing
